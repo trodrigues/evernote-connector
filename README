@@ -1,0 +1,5 @@
+evernote-connector is a python package which aims to ease communication with Evernote's API.
+
+Assuming you have downloaded Evernote's API files (http://www.evernote.com/about/developer/api/), you need to place the files from lib/python somewhere on your python path.
+
+
