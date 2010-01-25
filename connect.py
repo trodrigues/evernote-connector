@@ -6,18 +6,22 @@
 import sys
 import hashlib
 import time
+import re
 import thrift.protocol.TBinaryProtocol as TBinaryProtocol
 import thrift.transport.THttpClient as THttpClient
 import evernote.edam.userstore.UserStore as UserStore
 import evernote.edam.userstore.constants as UserStoreConstants
 import evernote.edam.notestore.NoteStore as NoteStore
 import evernote.edam.type.ttypes as Types
+import evernote.edam.error.constants as ErrorConstants
 
+#TODO add a default settings.py with the following variables:
+#consumerKey = "username"
+#consumerSecret = "apikey"
+#userStoreUri = "https://sandbox.evernote.com/edam/user"
+#noteStoreUriBase = "http://sandbox.evernote.com/edam/note/"
 from settings import *
 
-#
-# Configure these based on the API key you received from Evernote
-#
 
 if len(sys.argv) < 3:
     print "Arguments:  <username> <password>";
@@ -26,7 +30,12 @@ if len(sys.argv) < 3:
 username = sys.argv[1]
 password = sys.argv[2]
 action = sys.argv[3]
+if len(sys.argv) >= 4:
+    wantedNotebook = sys.argv[4]
+else:
+    wantedNotebook = None
 
+# setup the basic connection stuff
 userStoreHttpClient = THttpClient.THttpClient(userStoreUri)
 userStoreProtocol = TBinaryProtocol.TBinaryProtocol(userStoreHttpClient)
 userStore = UserStore.Client(userStoreProtocol)
@@ -34,29 +43,39 @@ userStore = UserStore.Client(userStoreProtocol)
 versionOK = userStore.checkVersion("Python EDAMTest",
                                    UserStoreConstants.EDAM_VERSION_MAJOR,
                                    UserStoreConstants.EDAM_VERSION_MINOR)
+versionOK = False
 
-print "Is my EDAM protocol version up to date? ", str(versionOK)
 if not versionOK:
-    exit(1)
+    raise ErrorConstants.EDAMSystemException(
+            ErrorConstants.EDAMErrorCode.UNKNOWN,
+            "EDAM protocol version not up to date ")
 
 authResult = userStore.authenticate(username, password,
                                     consumerKey, consumerSecret)
 user = authResult.user
 authToken = authResult.authenticationToken
-print "Authentication was successful for ", user.username
-print "Authentication token = ", authToken
+#print "Authentication was successful for ", user.username
+#print "Authentication token = ", authToken
 
 noteStoreUri =  noteStoreUriBase + user.shardId
 noteStoreHttpClient = THttpClient.THttpClient(noteStoreUri)
 noteStoreProtocol = TBinaryProtocol.TBinaryProtocol(noteStoreHttpClient)
 noteStore = NoteStore.Client(noteStoreProtocol)
 
+# get notebooks
 notebooks = noteStore.listNotebooks(authToken)
-print "Found ", len(notebooks), " notebooks:"
+matchingNotebooks = []
+
+#print "Found ", len(notebooks), " notebooks:"
 for notebook in notebooks:
-    print "  * ", notebook.name
+    #print "  * ", notebook.name
     if notebook.defaultNotebook:
         defaultNotebook = notebook
+    #TODO test me
+    if wantedNotebook is not None:
+        nbRe = re.compile(wantedNotebook, re.I)
+        if re.search(nbRe, notebook.name) is not None:
+            matchingNotebooks.append(notebook)
 
 if(action == "send"):
     print
