@@ -39,7 +39,7 @@ class EvernoteConnector(object):
         authResult = userStore.authenticate(username, password,
                                             consumerKey, consumerSecret)
         user = authResult.user
-        authToken = authResult.authenticationToken
+        self.authToken = authResult.authenticationToken
 
         noteStoreUri =  noteStoreUriBase + user.shardId
         noteStoreHttpClient = THttpClient.THttpClient(noteStoreUri)
@@ -50,11 +50,11 @@ class EvernoteConnector(object):
         self.notebooks = None
         self.defaultNotebook = None
 
-    def get_notebooks(self, filter):
+    def getNotebooks(self, filter):
         """
         get notebooks, set default and search for specified notebooks
         """
-        self.notebooks = noteStore.listNotebooks(authToken)
+        self.notebooks = self.noteStore.listNotebooks(self.authToken)
         matchingNotebooks = []
 
         for notebook in self.notebooks:
@@ -67,7 +67,7 @@ class EvernoteConnector(object):
         
         return matchingNotebooks
 
-    def send_note(self):
+    def sendNote(self):
         note = Types.Note()
         note.notebookGuid = defaultNotebook.guid
         note.title = "Code Test note from EDAMTest.py"
@@ -85,25 +85,37 @@ class EvernoteConnector(object):
 
         print "Created note: ", str(createdNote)
 
-    def get_note(self):
+    def getNotes(self, notebook=None):
         filter = NoteStore.NoteFilter()
-        filter.notebookGuid = defaultNotebook.guid
+        
+        if notebook is not None:
+            filter.notebookGuid = notebook.guid
+        else:
+            filter.notebookGuid = self.defaultNotebook.guid
 
-        tags = noteStore.listTags(authToken)
-        for tag in tags:
-            if tag.name.find("test") >= 0:
-                filter.tagGuids = [tag.guid]
-                break
+        #for tag in tags:
+        #    if tag.name.find("test") >= 0:
+        #        filter.tagGuids = [tag.guid]
+        #        break
 
-        noteList = noteStore.findNotes(authToken, filter, 0, 9999)
+        noteList = self.noteStore.findNotes(self.authToken, filter, 0, 9999)
+        notes = []
 
         for note in noteList.notes:
-            print "id: "+note.guid
-            print "title :"+note.title
-            print "content:"
-            print noteStore.getNoteContent(authToken, note.guid)
-            print "---------------------"
-            print ""
+            if note.active is True:
+                #TODO add more properties 
+                noteDic = {
+                    "guid": note.guid,
+                    "title": note.title,
+                    "content": self.noteStore.getNoteContent(self.authToken, note.guid),
+                    "created": note.created,
+                    "updated": note.updated,
+                    "tags": note.tagNames
+                }
+                notes.append(noteDic)
+        
+        return notes
+
 
 
 if len(sys.argv) < 3:
@@ -122,5 +134,5 @@ connector = EvernoteConnector(username, password,
         consumerKey, consumerSecret, userStoreUri, 
         noteStoreUriBase)
 
-connector.get_notebooks(wantedNotebook)
-
+connector.getNotebooks(wantedNotebook)
+notes = connector.getNotes()
