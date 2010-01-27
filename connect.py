@@ -85,7 +85,8 @@ class EvernoteConnector(object):
 
         print "Created note: ", str(createdNote)
 
-    def getNotes(self, notebook=None):
+
+    def _getNotes(self, wantedNotes=False, notebook=None, list=False):
         filter = NoteStore.NoteFilter()
         
         if notebook is not None:
@@ -104,17 +105,30 @@ class EvernoteConnector(object):
         for note in noteList.notes:
             if note.active is True:
                 #TODO add more properties 
-                noteDic = {
-                    "guid": note.guid,
-                    "title": note.title,
-                    "content": self.noteStore.getNoteContent(self.authToken, note.guid),
-                    "created": note.created,
-                    "updated": note.updated,
-                    "tags": note.tagNames
-                }
-                notes.append(noteDic)
+                if wantedNotes is False or\
+                    wantedNotes is not False and note.guid in wantedNotes:
+
+                    noteDic = {
+                        "guid": note.guid,
+                        "title": note.title,
+                        "created": note.created,
+                        "updated": note.updated,
+                        "tags": note.tagNames
+                    }
+                    if list is False:
+                        noteDic["content"] = self.noteStore.getNoteContent(
+                            self.authToken, note.guid),
+                    notes.append(noteDic)
         
         return notes
+
+
+    def getNoteList(self, notebook=None):
+        return self._getNotes(notebook=notebook, list=True)
+
+
+    def getNotes(self, notes=False, notebook=None):
+        return self._getNotes(wantedNotes=notes, notebook=notebook, list=False)
 
 
 
@@ -125,7 +139,7 @@ if len(sys.argv) < 3:
 username = sys.argv[1]
 password = sys.argv[2]
 action = sys.argv[3]
-if len(sys.argv) >= 4:
+if len(sys.argv) >= 5:
     wantedNotebook = sys.argv[4]
 else:
     wantedNotebook = None
@@ -135,4 +149,5 @@ connector = EvernoteConnector(username, password,
         noteStoreUriBase)
 
 connector.getNotebooks(wantedNotebook)
-notes = connector.getNotes()
+notes = connector.getNoteList()
+print connector.getNotes([notes[0]["guid"], notes[1]["guid"]])
