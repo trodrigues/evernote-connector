@@ -10,12 +10,6 @@ import evernote.edam.notestore.NoteStore as NoteStore
 import evernote.edam.type.ttypes as Types
 import evernote.edam.error.constants as ErrorConstants
 
-#TODO add a default settings.py with the following variables:
-#consumerKey = "username"
-#consumerSecret = "apikey"
-#userStoreUri = "https://sandbox.evernote.com/edam/user"
-#noteStoreUriBase = "http://sandbox.evernote.com/edam/note/"
-from settings import *
 
 class EvernoteConnector(object):
     def __init__(self, username, password, consumerKey, 
@@ -47,8 +41,8 @@ class EvernoteConnector(object):
 
         self.noteStore = NoteStore.Client(noteStoreProtocol)
 
-        self.notebooks = None
-        self.defaultNotebook = None
+        self.getNotebooks(None)
+
 
     def getNotebooks(self, filter):
         """
@@ -67,23 +61,59 @@ class EvernoteConnector(object):
         
         return matchingNotebooks
 
-    def sendNote(self):
+
+    def newNote(self, notebook):
         note = Types.Note()
-        note.notebookGuid = defaultNotebook.guid
-        note.title = "Code Test note from EDAMTest.py"
-        note.content = '<?xml version="1.0" encoding="UTF-8"?>'
-        note.content += '<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml.dtd">'
-        note.content += '<en-note>Here is the Evernote logo:<br/>'
-        note.content += '<p title="someclass">some text</p>'
-        note.content += ''
-        note.content += ''
-        note.content += '</en-note>'
+        
+        if notebook is not False:
+            note.notebookGuid = notebook.guid
+        else:
+            note.notebookGuid = self.defaultNotebook.guid
+
+        return note
+
+
+    def formatNoteContent(self, innerContent):
+        content = '<?xml version="1.0" encoding="UTF-8"?>'
+        content += '<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml.dtd">'
+        content += '<en-note>' + innerContent
+        content += '</en-note>'
+        return content
+
+
+    def createNote(self, title, content, notebook=False):
+        note = self.newNote(notebook)
+        note.title = title
+        note.content = self.formatNoteContent(content)
         note.created = int(time.time() * 1000)
         note.updated = note.created
 
-        createdNote = noteStore.createNote(authToken, note)
+        return self.noteToDic(
+                self.noteStore.createNote(self.authToken, note))
 
-        print "Created note: ", str(createdNote)
+
+    def updateNote(self, guid, title=False, content=False, notebook=False):
+        note = self.newNote(notebook)
+        note.guid = guid
+
+        #TODO fetch already existent title/content if not given
+        note.title = title
+        note.content = self.formatNoteContent(content)
+
+        note.updated = int(time.time() * 1000)
+
+        return self.noteToDic(
+                self.noteStore.updateNote(self.authToken, note))
+
+    
+    def noteToDic(self, note):
+         return {
+            "guid": note.guid,
+            "title": note.title,
+            "created": note.created,
+            "updated": note.updated,
+            "tags": note.tagNames
+        }
 
 
     def _getNotes(self, wantedNotes=False, notebook=None, list=False):
@@ -108,16 +138,10 @@ class EvernoteConnector(object):
                 if wantedNotes is False or\
                     wantedNotes is not False and note.guid in wantedNotes:
 
-                    noteDic = {
-                        "guid": note.guid,
-                        "title": note.title,
-                        "created": note.created,
-                        "updated": note.updated,
-                        "tags": note.tagNames
-                    }
+                    noteDic = self.noteToDic(note)
                     if list is False:
                         noteDic["content"] = self.noteStore.getNoteContent(
-                            self.authToken, note.guid),
+                            self.authToken, note.guid)
                     notes.append(noteDic)
         
         return notes
@@ -130,24 +154,3 @@ class EvernoteConnector(object):
     def getNotes(self, notes=False, notebook=None):
         return self._getNotes(wantedNotes=notes, notebook=notebook, list=False)
 
-
-
-if len(sys.argv) < 3:
-    print "Arguments:  <username> <password>";
-    exit(1)
-
-username = sys.argv[1]
-password = sys.argv[2]
-action = sys.argv[3]
-if len(sys.argv) >= 5:
-    wantedNotebook = sys.argv[4]
-else:
-    wantedNotebook = None
-
-connector = EvernoteConnector(username, password, 
-        consumerKey, consumerSecret, userStoreUri, 
-        noteStoreUriBase)
-
-connector.getNotebooks(wantedNotebook)
-notes = connector.getNoteList()
-print connector.getNotes([notes[0]["guid"], notes[1]["guid"]])
